@@ -18,23 +18,11 @@ float randFloat()
 	return rand() / (float)RAND_MAX;
 }
 
-void copyCvtData(ci::Surface8u const& surface, Array2D<Vec3f> dst) {
-	forxy(dst) {
-		ColorAT<uint8_t> inPixel = surface.getPixel(p);
-		dst(p) = Vec3f(inPixel.r, inPixel.g, inPixel.b) / 255.0f;
-	}
-}
-void copyCvtData(ci::SurfaceT<float> const& surface, Array2D<Vec3f> dst) {
-	forxy(dst) {
-		ColorAT<float> inPixel = surface.getPixel(p);
-		dst(p) = Vec3f(inPixel.r, inPixel.g, inPixel.b);
-	}
-}
-void copyCvtData(ci::SurfaceT<float> const& surface, Array2D<float> dst) {
-	forxy(dst) {
-		ColorAT<float> inPixel = surface.getPixel(p);
-		dst(p) = inPixel.r;
-	}
+void createConsole()
+{
+	AllocConsole();
+	std::fstream* fs = new std::fstream("CONOUT$");
+	std::cout.rdbuf(fs->rdbuf());
 }
 
 void loadFile(std::vector<unsigned char>& buffer, const std::string& filename) //designed for loading files from hard disk in an std::vector
@@ -107,9 +95,21 @@ namespace Stopwatch
 	}
 }
 
-void createConsole()
-{
-	AllocConsole();
-	std::fstream* fs = new std::fstream("CONOUT$");
-	std::cout.rdbuf(fs->rdbuf());
+void copyCvtData(ci::Surface8u const& surface, Array2D<Vec3f> dst) {
+	forxy(dst) {
+		ColorAT<uint8_t> inPixel = surface.getPixel(p);
+		dst(p) = Vec3f(inPixel.r, inPixel.g, inPixel.b) / 255.0f;
+	}
+}
+void copyCvtData(ci::SurfaceT<float> const& surface, Array2D<Vec3f> dst) {
+	forxy(dst) {
+		ColorAT<float> inPixel = surface.getPixel(p);
+		dst(p) = Vec3f(inPixel.r, inPixel.g, inPixel.b);
+	}
+}
+void copyCvtData(ci::SurfaceT<float> const& surface, Array2D<float> dst) {
+	forxy(dst) {
+		ColorAT<float> inPixel = surface.getPixel(p);
+		dst(p) = inPixel.r;
+	}
 }

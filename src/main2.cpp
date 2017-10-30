@@ -8,17 +8,17 @@
 #include "mainfunc_impl.h"
 #include "util.h"
 #include "shade.h"
+#include "stefanfw.h"
 
+// 13fps
 
 typedef WrapModes::GetWrapped WrapMode;
 
-//int wsx=800, wsy=800.0*(800.0/1280.0);
-const int scale=1;
+int wsx=800, wsy=800.0*(800.0/1280.0);
+const int scale=4;
 Array2D<Vec3f> img;
 Array2D<Vec3f> img_in;
 bool pause2=false;
-bool keys[256];
-float mouseX, mouseY;
 std::map<int, gl::Texture> texs;
 
 struct SApp : AppBasic {
@@ -62,8 +62,8 @@ struct SApp : AppBasic {
 	typedef Array2D<float> Img;
 	void update_2()
 	{
-		auto tex_in = gtex(img_in);
-		auto tex_state = shade2(tex_in, "_out = vec3(0.0);");
+		static auto tex_in = gtex(img_in);
+		auto tex_state = shade2(tex_in, "_out = vec3(0.0);", ShadeOpts().ifmt(GL_RGBA32F));
 		const int lvlstep=5;//15
 		for(int lvl=0; lvl<=255; lvl+=lvlstep)
 		{
@@ -71,10 +71,11 @@ struct SApp : AppBasic {
 			globaldict["flvl"] = flvl;
 			auto lvlset = shade2(tex_in,
 				"vec3 c = fetch3();"
-				"c.r = c.r > flvl ? 1.0 : 0.0;"
-				"c.g = c.g > flvl ? 1.0 : 0.0;"
-				"c.b = c.b > flvl ? 1.0 : 0.0;"
+				"c.r = c.r >= flvl ? 1.0 : 0.0;"
+				"c.g = c.g >= flvl ? 1.0 : 0.0;"
+				"c.b = c.b >= flvl ? 1.0 : 0.0;"
 				"_out = c;");
+			lvlset.setWrap(GL_REPEAT, GL_REPEAT);
 			lvlset = gauss3tex(lvlset);
 			lvlset = shade2(lvlset,
 				"float fwidth = 1.0 / 3.0; vec3 c = fetch3();"
@@ -87,8 +88,10 @@ struct SApp : AppBasic {
 				);
 		}
 
-		//img_in=img;
-		img = img_in = gettexdata<Vec3f>(tex_state, GL_RGB, GL_FLOAT);
+		tex_in = tex_state;
+		sw::timeit("draw", [&]() {
+			gl::draw(tex_in, getWindowBounds());
+		});
 	}
 	void update_()
 	{
@@ -104,74 +107,44 @@ struct SApp : AppBasic {
 			const int lvlstep=5;//15
 			for(int lvl=0; lvl<=255; lvl+=lvlstep)
 			{
-				bool shouldPrint=false;//lvl%40==0;
-				if(shouldPrint)
-					cout << "==== calculating lvl " << lvl << ", c " << c << ": " << endl;
+				//bool shouldPrint=false;//lvl%40==0;
+				//if(shouldPrint)
+				//	cout << "==== calculating lvl " << lvl << ", c " << c << ": " << endl;
 				float flvl = lvl/255.0f;
 				Array2D<float> lvlset(img.w, img.h);
-				sw::start();
-				forxy(lvlset) {
-					lvlset(p) = img_in(p)[c] >= flvl ? 1.0f : 0.0f;
-				}
-				if(shouldPrint)sw::printElapsed("create lvlset");
-				sw::start();
-				//lvlset = gaussianBlur<float, WrapModes::Get_WrapZeros>(lvlset, 2*3+1);
-				//lvlset = gaussianBlur<float, WrapModes::Get_WrapZeros>(lvlset, 2*3*3+1);
-				//for(int i = 0; i < 3; i++)
-					//lvlset = blurFaster<float, WrapModes::Get_WrapZeros>(lvlset, 2);
-				lvlset = blurFaster<float, WrapModes::Get_WrapZeros>(lvlset, 1);
-				if(shouldPrint)sw::printElapsed("blur");
-				sw::start();
-				//auto grads = get_gradients(lvlset);
-				forxy(lvlset) {
-					//float fwidth = grads(p).length();
-					if(lvlset(p)==0.0f||lvlset(p)==1.0f)
-						continue;
-					float fwidth = 1.0f / 3.0f;
-					lvlset(p)=smoothstep(0.5f-fwidth/2.0f, 0.5f+fwidth/2.0f, lvlset(p));
-				}
-				if(shouldPrint)sw::printElapsed("threshold");
-				sw::start();
-				forxy(img)
-				{
-					img(p)[c] = lerp(img(p)[c], flvl, lvlset(p));
-				}
-				if(shouldPrint)sw::printElapsed("lerp");
+				sw::timeit("create lvlset", [&]() {
+					forxy(lvlset) {
+						lvlset(p) = img_in(p)[c] >= flvl ? 1.0f : 0.0f;
+					}
+				});
+				sw::timeit("blur", [&]() {
+					//lvlset = blurFaster<float, WrapModes::Get_WrapZeros>(lvlset, 1);
+					lvlset = gauss3(lvlset);
+				});
+				sw::timeit("threshold", [&]() {
+					//auto grads = get_gradients(lvlset);
+					forxy(lvlset) {
+						//float fwidth = grads(p).length();
+						if(lvlset(p)==0.0f||lvlset(p)==1.0f)
+							continue;
+						float fwidth = 1.0f / 3.0f;
+						lvlset(p)=smoothstep(0.5f-fwidth/2.0f, 0.5f+fwidth/2.0f, lvlset(p));
+					}
+				});
+				sw::timeit("lerp", [&]() {
+					forxy(img)
+					{
+						img(p)[c] = lerp(img(p)[c], flvl, lvlset(p));
+					}
+				});
 			}
 		}
-		// sharpen
-		sw::start();
-		/*auto imgb = longTailBlur(img);
-		float sharpenCoef = cfg1::getOpt("sharpenCoef", .5f, [&]() { return keys['s']; },
-			[&]() { return niceExpRangeY(mouseY, .1f, 100.0f); });
-		forxy(img)
-		{
-			img(p) += sharpenCoef * (img(p)-imgb(p));
-			for(int c = 0; c < 3; c++)
-				img(p)[c] = max(0.0f, min(1.0f, img(p)[c]));
-		}
-		sw::printElapsed("sharpen");*/
 		img_in=img;
-	}
-	template<class T>
-	Array2D<T> longTailBlur(Array2D<T> src)
-	{
-		auto state = src.clone();
-		float sumw=1.0f;
-		for(int i = 0; i < 10; i++)
-		{
-			auto srcb = gaussianBlur(src, i*2+1);
-			sumw*=4.0f;
-			sumw+=1.0f;
-			forxy(state) {
-				state(p) *= 4.0f;
-				state(p) += srcb(p);
-			}
-		}
-		forxy(state) {
-			state(p) /= sumw;
-		}
-		return state;
+		sw::timeit("draw", [&]() {
+			auto tex=gtex(img);
+			gl::draw(tex, getWindowBounds());
+		});
+
 	}
 	void draw()
 	{
@@ -182,13 +155,7 @@ struct SApp : AppBasic {
 		my_console::beginFrame();
 		sw::beginFrame();
 		gl::clear(Color(0, 0, 0));
-		update_();
-		sw::timeit("draw", [&]() {
-			auto tex=gtex(img);
-			//tex=shade2(tex, "float f=fetch1(); f/=f+.1; _out=vec3(f);");
-			tex.setMagFilter(GL_NEAREST);
-			gl::draw(tex, getWindowBounds());
-		});
+		update_2();
 		cfg1::print();
 		sw::endFrame();
 		my_console::endFrame();

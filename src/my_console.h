@@ -10,10 +10,6 @@ public:
 		original_cout_rdbuf = cout.rdbuf(my_cout.rdbuf());
 		//cout.rdbuf(my_cout.rdbuf());
 	}
-	static void clr() {
-		clearconsole();
-		gotoxy(0, 0);
-	}
 	static void endFrame() {
 		cout.rdbuf(original_cout_rdbuf);
 		

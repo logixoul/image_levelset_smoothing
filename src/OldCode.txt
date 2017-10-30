@@ -1,0 +1,33 @@
+template<class T>
+Array2D<T> longTailBlur(Array2D<T> src)
+{
+	auto state = src.clone();
+	float sumw=1.0f;
+	for(int i = 0; i < 10; i++)
+	{
+		auto srcb = gaussianBlur(src, i*2+1);
+		sumw*=4.0f;
+		sumw+=1.0f;
+		forxy(state) {
+			state(p) *= 4.0f;
+			state(p) += srcb(p);
+		}
+	}
+	forxy(state) {
+		state(p) /= sumw;
+	}
+	return state;
+}
+	// sharpen
+	/*sw::start();
+	auto imgb = longTailBlur(img);
+	float sharpenCoef = cfg1::getOpt("sharpenCoef", .5f, [&]() { return keys['s']; },
+		[&]() { return niceExpRangeY(mouseY, .1f, 100.0f); });
+	forxy(img)
+	{
+		img(p) += sharpenCoef * (img(p)-imgb(p));
+		for(int c = 0; c < 3; c++)
+			img(p)[c] = max(0.0f, min(1.0f, img(p)[c]));
+	}
+	sw::printElapsed("sharpen");*/
+	
