@@ -162,7 +162,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="hcl_lib.fs" />
-    <None Include="heightmap.fs" />
     <None Include="OldCode.txt" />
     <None Include="simplexnoise3d.fs.glsl" />
     <None Include="stuff.fs" />
